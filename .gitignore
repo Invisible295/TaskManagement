@@ -71,4 +71,6 @@ coverage/
 /.pids
 /*.tgz
 
+# database
+TaskManager.sql
 EOF
