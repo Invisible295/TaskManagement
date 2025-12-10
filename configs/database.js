@@ -1,13 +1,29 @@
-// configs/database.js
 const mysql = require('mysql2/promise');
+require('dotenv').config();
+const config = require('../utils/config');
+const { host, user, password, database, port } = config.mysql;
 
-const connectDB = async () => {
-  return await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '123456',   // nếu không có password
-    database: process.env.DB_NAME || 'TastManager'
-  });
-};
+const pool = mysql.createPool({
+  port: port,
+  host: host,
+  user: user,
+  password: password,
+  database: database,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
-module.exports = { connectDB };
+// Test connection
+(async () => {
+  try {
+    const connection = await pool.getConnection();
+    console.log('Connected to MySQL!');
+    connection.release();
+  } catch (err) {
+    console.error('Database connection failed:', err);
+    process.exit(1);
+  }
+})();
+
+module.exports = pool;
