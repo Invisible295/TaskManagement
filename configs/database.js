@@ -1,16 +1,13 @@
+// configs/database.js
 const mysql = require('mysql2/promise');
-require('dotenv').config();
 
-async function connectDB() {
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
+const connectDB = async () => {
+  return await mysql.createConnection({
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '123456',   // nếu không có password
+    database: process.env.DB_NAME || 'TastManager'
   });
-  console.log('MySQL connected!');
-  return connection;
-}
+};
 
-module.exports = connectDB;
+module.exports = { connectDB };
