@@ -1,4 +1,4 @@
-// enhanced-dashboard.js
+// enhanced-dashboard.js - FIXED VERSION
 requireAuth();
 
 // ===== STATE =====
@@ -102,6 +102,7 @@ async function loadTasks() {
         if (data.status === 'success') {
             currentTasks = data.data.tasks;
             displayTasks(currentTasks);
+            await loadGroups();
             populateGroupSelect(currentGroups);
         }
     } catch (error) {
@@ -149,6 +150,8 @@ function displayTasks(tasks) {
                 <span class="task-status ${statusClass}">${task.status}</span>
                 <div class="task-actions">
                     ${task.groupID ? `<button class="btn-icon" onclick="openAssignModal(${task.taskid})" title="Giao việc">👤</button>` : ''}
+                    <button class="btn-icon" onclick="openEditTaskModal(${task.taskid})" title="Sửa">✏️</button>
+                    <button class="btn-icon" onclick="deleteTask(${task.taskid})" title="Xóa">🗑️</button>
                 </div>
             </div>
         </div>
@@ -251,8 +254,32 @@ function openModal(modalId) {
     
     if (modalId === 'taskModal') {
         document.getElementById('taskForm').reset();
-        loadGroups().then(() => populateGroupSelect(currentGroups));
+        document.getElementById('editTaskId').value = '';
+        document.getElementById('taskModalTitle').textContent = 'Thêm công việc';
     }
+}
+
+function openCreateTaskModal() {
+    openModal('taskModal');
+    loadGroups().then(() => populateGroupSelect(currentGroups));
+}
+
+async function openEditTaskModal(taskId) {
+    const task = currentTasks.find(t => t.taskid === taskId);
+    if (!task) return;
+    
+    document.getElementById('editTaskId').value = taskId;
+    document.getElementById('taskName').value = task.taskname;
+    document.getElementById('taskDescription').value = task.description || '';
+    document.getElementById('taskStatus').value = task.status;
+    document.getElementById('taskPriority').value = task.priority;
+    
+    await loadGroups();
+    populateGroupSelect(currentGroups);
+    document.getElementById('taskGroup').value = task.groupID || '';
+    
+    document.getElementById('taskModalTitle').textContent = 'Sửa công việc';
+    openModal('taskModal');
 }
 
 function closeModal(modalId) {
@@ -261,6 +288,7 @@ function closeModal(modalId) {
 }
 
 async function saveTask() {
+    const taskId = document.getElementById('editTaskId').value;
     const taskData = {
         taskname: document.getElementById('taskName').value.trim(),
         description: document.getElementById('taskDescription').value.trim(),
@@ -275,24 +303,58 @@ async function saveTask() {
     }
     
     try {
-        const response = await fetch(`${CONFIG.API_URL}/tasks/create`, {
-            method: 'POST',
-            headers: getAuthHeaders(),
-            body: JSON.stringify(taskData)
-        });
+        let response;
+        if (taskId) {
+            // Update existing task
+            response = await fetch(`${CONFIG.API_URL}/tasks/${taskId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(taskData)
+            });
+        } else {
+            // Create new task
+            response = await fetch(`${CONFIG.API_URL}/tasks/create`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(taskData)
+            });
+        }
         
         const data = await response.json();
         
         if (data.status === 'success') {
             closeModal('taskModal');
             loadTasks();
-            alert('✅ Thêm công việc thành công!');
+            alert(taskId ? '✅ Cập nhật công việc thành công!' : '✅ Thêm công việc thành công!');
         } else {
             alert('❌ ' + (data.message || 'Có lỗi xảy ra'));
         }
     } catch (error) {
         console.error('Error saving task:', error);
         alert('❌ Không thể lưu công việc');
+    }
+}
+
+async function deleteTask(taskId) {
+    if (!confirm('Bạn có chắc muốn xóa công việc này?')) return;
+    
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/tasks/${taskId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ Xóa công việc thành công!');
+            loadTasks();
+        } else {
+            alert('❌ ' + (data.message || 'Không thể xóa công việc'));
+        }
+    } catch (error) {
+        console.error('Error deleting task:', error);
+        alert('❌ Có lỗi xảy ra');
     }
 }
 
@@ -318,12 +380,14 @@ async function loadGroups() {
         }
     } catch (error) {
         console.error('Error loading groups:', error);
-        document.getElementById('groupsList').innerHTML = `
-            <div class="empty-state">
-                <h3>❌ Lỗi tải dữ liệu</h3>
-                <p>${error.message}</p>
-            </div>
-        `;
+        if (document.getElementById('groupsList')) {
+            document.getElementById('groupsList').innerHTML = `
+                <div class="empty-state">
+                    <h3>❌ Lỗi tải dữ liệu</h3>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
     }
 }
 
@@ -352,6 +416,11 @@ function displayGroups(groups) {
                 <button class="btn-group-action btn-members" onclick="openMembersModal('${group.groupID}')">
                     👥 Thành viên
                 </button>
+                ${group.role === 'leader' ? `
+                    <button class="btn-group-action btn-delete" onclick="deleteGroup('${group.groupID}')">
+                        🗑️ Xóa nhóm
+                    </button>
+                ` : ''}
             </div>
         </div>
     `).join('');
@@ -387,6 +456,29 @@ async function saveGroup() {
     }
 }
 
+async function deleteGroup(groupId) {
+    if (!confirm('Bạn có chắc muốn xóa nhóm này? Tất cả tasks trong nhóm cũng sẽ bị xóa!')) return;
+    
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/groups/${groupId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ Xóa nhóm thành công!');
+            loadGroups();
+        } else {
+            alert('❌ ' + (data.message || 'Không thể xóa nhóm'));
+        }
+    } catch (error) {
+        console.error('Error deleting group:', error);
+        alert('❌ Có lỗi xảy ra');
+    }
+}
+
 // ===== MEMBERS MODAL =====
 async function openMembersModal(groupId) {
     document.getElementById('currentGroupId').value = groupId;
@@ -401,8 +493,6 @@ async function openMembersModal(groupId) {
             currentGroupMembers = data.data.members;
             displayMembers(currentGroupMembers, groupId);
             openModal('membersModal');
-            
-            // Setup search
             setupMemberSearch(groupId);
         }
     } catch (error) {
@@ -445,8 +535,6 @@ function displayMembers(members, groupId) {
     }).join('');
 }
 
-// views/js/enhanced-dashboard.js - Phần member search đã fix
-
 function setupMemberSearch(groupId) {
     const searchInput = document.getElementById('searchMember');
     const resultsDiv = document.getElementById('searchResults');
@@ -461,7 +549,6 @@ function setupMemberSearch(groupId) {
             return;
         }
         
-        // ✅ Filter users - loại bỏ members hiện tại
         const filtered = allUsers.filter(u => {
             const isCurrentMember = currentGroupMembers.find(m => m.id === u.id);
             const matchesSearch = u.username.toLowerCase().includes(keyword) || 
@@ -493,8 +580,6 @@ function setupMemberSearch(groupId) {
 
 async function addMemberToGroup(groupId, userId) {
     try {
-        console.log('Adding member:', { groupId, userId }); // Debug
-        
         const response = await fetch(`${CONFIG.API_URL}/groups/${groupId}/members`, {
             method: 'POST',
             headers: getAuthHeaders(),
@@ -502,12 +587,11 @@ async function addMemberToGroup(groupId, userId) {
         });
         
         const data = await response.json();
-        console.log('Add member response:', data); // Debug
         
         if (data.status === 'success') {
             document.getElementById('searchMember').value = '';
             document.getElementById('searchResults').style.display = 'none';
-            await openMembersModal(groupId); // Reload
+            await openMembersModal(groupId);
             alert('✅ Thêm thành viên thành công!');
         } else {
             alert('❌ ' + (data.message || 'Không thể thêm thành viên'));
@@ -518,27 +602,26 @@ async function addMemberToGroup(groupId, userId) {
     }
 }
 
-// ✅ Fix cho openMembersModal - đảm bảo load lại currentGroupMembers
-async function openMembersModal(groupId) {
-    document.getElementById('currentGroupId').value = groupId;
+async function removeMember(groupId, userId) {
+    if (!confirm('Bạn có chắc muốn xóa thành viên này?')) return;
     
     try {
-        const response = await fetch(`${CONFIG.API_URL}/groups/${groupId}/members`, {
+        const response = await fetch(`${CONFIG.API_URL}/groups/${groupId}/members/${userId}`, {
+            method: 'DELETE',
             headers: getAuthHeaders()
         });
+        
         const data = await response.json();
         
         if (data.status === 'success') {
-            currentGroupMembers = data.data.members; // ✅ Cập nhật lại
-            displayMembers(currentGroupMembers, groupId);
-            openModal('membersModal');
-            
-            // Setup search SAU KHI đã load members
-            setupMemberSearch(groupId);
+            alert('✅ Xóa thành viên thành công!');
+            await openMembersModal(groupId);
+        } else {
+            alert('❌ ' + (data.message || 'Không thể xóa thành viên'));
         }
     } catch (error) {
-        console.error('Error loading members:', error);
-        alert('❌ Không thể tải danh sách thành viên');
+        console.error('Error removing member:', error);
+        alert('❌ Có lỗi xảy ra');
     }
 }
 
@@ -719,4 +802,20 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// CSS cho nút delete group (thêm vào head nếu cần)
+if (!document.getElementById('custom-styles')) {
+    const style = document.createElement('style');
+    style.id = 'custom-styles';
+    style.textContent = `
+        .btn-delete {
+            background: #e74c3c !important;
+            color: white !important;
+        }
+        .btn-delete:hover {
+            background: #c0392b !important;
+        }
+    `;
+    document.head.appendChild(style);
 }
