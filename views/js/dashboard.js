@@ -1,13 +1,14 @@
-// views/js/dashboard.js
-// Dashboard logic - Tasks, Groups, Profile management
+// views/js/dashboard.js - CẬP NHẬT
+// Dashboard logic với Task Assignment
 
-// Kiểm tra authentication
 requireAuth();
 
 // ===== STATE =====
 let currentTasks = [];
 let currentGroups = [];
+let currentGroupMembers = [];
 let editingTaskId = null;
+let assigningTaskId = null;
 
 // ===== INIT =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -37,7 +38,6 @@ async function loadUserInfo() {
     }
 }
 
-// Đăng xuất
 function logout() {
     if (confirm('Bạn có chắc muốn đăng xuất?')) {
         removeToken();
@@ -51,23 +51,22 @@ document.querySelectorAll('.nav-item').forEach(item => {
         e.preventDefault();
         const page = item.dataset.page;
         
-        // Update active states
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         
         item.classList.add('active');
         document.getElementById(page + 'Page').classList.add('active');
         
-        // Update page title
         const titles = {
             tasks: 'Công việc của tôi',
+            assigned: 'Công việc được giao',
             groups: 'Nhóm của tôi',
             profile: 'Hồ sơ cá nhân'
         };
         document.getElementById('pageTitle').textContent = titles[page];
         
-        // Load data
         if (page === 'tasks') loadTasks();
+        if (page === 'assigned') loadAssignedTasks();
         if (page === 'groups') loadGroups();
         if (page === 'profile') loadProfile();
     });
@@ -112,7 +111,6 @@ function displayTasks(tasks) {
     }
     
     container.innerHTML = tasks.map(task => {
-        // Status class
         let statusClass = 'status-pending';
         if (task.status === 'In Progress') statusClass = 'status-progress';
         if (task.status === 'Completed') statusClass = 'status-completed';
@@ -126,11 +124,11 @@ function displayTasks(tasks) {
                 </div>
             </div>
             <div class="task-description">${escapeHtml(task.description) || 'Không có mô tả'}</div>
+            ${task.groupName ? `<div class="task-meta-item">👥 ${escapeHtml(task.groupName)}</div>` : ''}
             <div class="task-footer">
-                <span class="task-status ${statusClass}">
-                    ${task.status}
-                </span>
+                <span class="task-status ${statusClass}">${task.status}</span>
                 <div class="task-actions">
+                    ${task.groupID ? `<button class="btn-icon" onclick="openAssignModal(${task.taskid})" title="Giao việc">👤</button>` : ''}
                     <button class="btn-icon" onclick="editTask(${task.taskid})" title="Sửa">✏️</button>
                     <button class="btn-icon" onclick="deleteTask(${task.taskid})" title="Xóa">🗑️</button>
                 </div>
@@ -140,18 +138,219 @@ function displayTasks(tasks) {
     }).join('');
 }
 
+
+
+//Phần của LÂM
+// ===== ASSIGNED TASKS (MỚI) =====
+async function loadAssignedTasks() {
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/tasks/assigned-to-me`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            displayAssignedTasks(data.data.tasks);
+            if (CONFIG.DEBUG) console.log('✅ Assigned tasks loaded:', data.data.tasks.length);
+        }
+    } catch (error) {
+        console.error('Error loading assigned tasks:', error);
+        document.getElementById('assignedTasksList').innerHTML = `
+            <div class="empty-state">
+                <h3>❌ Lỗi tải dữ liệu</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function displayAssignedTasks(tasks) {
+    const container = document.getElementById('assignedTasksList');
+    
+    if (tasks.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <h3>📭 Chưa có công việc được giao</h3>
+                <p>Bạn chưa được giao công việc nào</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = tasks.map(task => {
+        let statusClass = 'status-pending';
+        if (task.status === 'In Progress') statusClass = 'status-progress';
+        if (task.status === 'Completed') statusClass = 'status-completed';
+        
+        return `
+        <div class="task-card">
+            <div class="task-header">
+                <div>
+                    <div class="task-title">${escapeHtml(task.taskname)}</div>
+                    <div class="task-priority">${'⭐'.repeat(task.priority)}</div>
+                </div>
+            </div>
+            <div class="task-description">${escapeHtml(task.description) || 'Không có mô tả'}</div>
+            <div class="task-meta">
+                ${task.groupName ? `<div class="task-meta-item"><span class="task-meta-icon">👥</span> ${escapeHtml(task.groupName)}</div>` : ''}
+                <div class="task-meta-item">
+                    <span class="task-meta-icon">👤</span> 
+                    Giao bởi: ${escapeHtml(task.assignedBy_fullname || task.assignedBy_name || 'N/A')}
+                </div>
+            </div>
+            <div class="task-footer">
+                <span class="task-status ${statusClass}">${task.status}</span>
+            </div>
+        </div>
+        `;
+    }).join('');
+}
+
+// ===== ASSIGN MODAL (MỚI) =====
+async function openAssignModal(taskId) {
+    assigningTaskId = taskId;
+    const task = currentTasks.find(t => t.taskid === taskId);
+    
+    if (!task || !task.groupID) {
+        alert('❌ Task không thuộc nhóm nào');
+        return;
+    }
+    
+    try {
+        // Load group members
+        const membersResponse = await fetch(`${CONFIG.API_URL}/groups/${task.groupID}/members`, {
+            headers: getAuthHeaders()
+        });
+        const membersData = await membersResponse.json();
+        
+        if (membersData.status === 'success') {
+            currentGroupMembers = membersData.data.members;
+            
+            // Populate select
+            const select = document.getElementById('assignUserSelect');
+            select.innerHTML = '<option value="">-- Chọn thành viên --</option>' +
+                currentGroupMembers.map(m => 
+                    `<option value="${m.id}">${escapeHtml(m.fullname)} (@${escapeHtml(m.username)})</option>`
+                ).join('');
+        }
+        
+        // Load current assignees
+        await loadTaskAssignees(taskId);
+        
+        document.getElementById('assignTaskId').value = taskId;
+        openModal('assignModal');
+    } catch (error) {
+        console.error('Error opening assign modal:', error);
+        alert('❌ Không thể tải thông tin nhóm');
+    }
+}
+
+async function loadTaskAssignees(taskId) {
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/tasks/${taskId}/assignees`, {
+            headers: getAuthHeaders()
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            displayAssignees(data.data.assignees);
+        }
+    } catch (error) {
+        console.error('Error loading assignees:', error);
+    }
+}
+
+function displayAssignees(assignees) {
+    const container = document.getElementById('assigneesList');
+    
+    if (assignees.length === 0) {
+        container.innerHTML = `
+            <div class="assignees-empty">
+                <p>👤 Chưa giao cho ai</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = assignees.map(assignee => `
+        <div class="assignee-item">
+            <div class="assignee-info">
+                <div class="assignee-avatar">${assignee.fullname.charAt(0).toUpperCase()}</div>
+                <div class="assignee-details">
+                    <div class="assignee-name">${escapeHtml(assignee.fullname)}</div>
+                    <div class="assignee-meta">@${escapeHtml(assignee.username)}</div>
+                </div>
+            </div>
+            <button class="btn-remove-assignee" onclick="unassignUser(${assigningTaskId}, ${assignee.id})">
+                Hủy
+            </button>
+        </div>
+    `).join('');
+}
+
+async function assignTaskToUser() {
+    const taskId = assigningTaskId;
+    const userId = document.getElementById('assignUserSelect').value;
+    
+    if (!userId) {
+        alert('⚠️ Vui lòng chọn thành viên');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/tasks/${taskId}/assign`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ assignedTo: parseInt(userId) })
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ Giao việc thành công!');
+            await loadTaskAssignees(taskId);
+            document.getElementById('assignUserSelect').value = '';
+        } else {
+            alert('❌ ' + (data.message || 'Không thể giao việc'));
+        }
+    } catch (error) {
+        console.error('Error assigning task:', error);
+        alert('❌ Có lỗi xảy ra');
+    }
+}
+
+async function unassignUser(taskId, userId) {
+    if (!confirm('Bạn có chắc muốn hủy giao việc này?')) return;
+    
+    try {
+        const response = await fetch(`${CONFIG.API_URL}/tasks/${taskId}/assign/${userId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('✅ Đã hủy giao việc');
+            await loadTaskAssignees(taskId);
+        } else {
+            alert('❌ ' + (data.message || 'Không thể hủy'));
+        }
+    } catch (error) {
+        console.error('Error unassigning:', error);
+        alert('❌ Có lỗi xảy ra');
+    }
+}
+
+// ===== CÁC HÀM CŨ =====
 function filterTasks() {
     const status = document.getElementById('filterStatus').value;
     const priority = document.getElementById('filterPriority').value;
     
     let filtered = currentTasks;
     
-    if (status) {
-        filtered = filtered.filter(t => t.status === status);
-    }
-    if (priority) {
-        filtered = filtered.filter(t => t.priority == priority);
-    }
+    if (status) filtered = filtered.filter(t => t.status === status);
+    if (priority) filtered = filtered.filter(t => t.priority == priority);
     
     displayTasks(filtered);
 }
@@ -172,7 +371,6 @@ function searchTasks() {
     displayTasks(filtered);
 }
 
-// ===== MODAL =====
 function openModal(modalId) {
     document.getElementById(modalId).classList.add('show');
     if (modalId === 'taskModal' && !editingTaskId) {
@@ -185,9 +383,9 @@ function openModal(modalId) {
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('show');
     editingTaskId = null;
+    assigningTaskId = null;
 }
 
-// ===== TASK FORM =====
 document.getElementById('taskForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
@@ -202,14 +400,12 @@ document.getElementById('taskForm').addEventListener('submit', async (e) => {
     try {
         let response;
         if (taskId) {
-            // Update existing task
             response = await fetch(`${CONFIG.API_URL}/tasks/${taskId}`, {
                 method: 'PUT',
                 headers: getAuthHeaders(),
                 body: JSON.stringify(taskData)
             });
         } else {
-            // Create new task
             response = await fetch(`${CONFIG.API_URL}/tasks/create`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
@@ -269,7 +465,6 @@ async function deleteTask(taskId) {
     }
 }
 
-// ===== GROUPS =====
 async function loadGroups() {
     try {
         const response = await fetch(`${CONFIG.API_URL}/groups`, {
@@ -280,7 +475,6 @@ async function loadGroups() {
         if (data.status === 'success') {
             currentGroups = data.data.groups;
             displayGroups(currentGroups);
-            
             if (CONFIG.DEBUG) console.log('✅ Groups loaded:', currentGroups.length);
         }
     } catch (error) {
@@ -317,7 +511,6 @@ function displayGroups(groups) {
     `).join('');
 }
 
-// ===== PROFILE =====
 async function loadProfile() {
     const user = getUser();
     if (user) {
@@ -357,7 +550,6 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
     }
 });
 
-// ===== UTILITY =====
 function escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
