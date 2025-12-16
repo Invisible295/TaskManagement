@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Task Manager</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <h2>📋 Task Manager</h2>
+        </div>
+        <nav class="nav">
+            <a href="#" class="nav-item active" data-page="tasks">
+                <span>📝</span> Công việc
+            </a>
+            <a href="#" class="nav-item" data-page="groups">
+                <span>👥</span> Nhóm
+            </a>
+            <a href="#" class="nav-item" data-page="profile">
+                <span>👤</span> Hồ sơ
+            </a>
+        </nav>
+        <div class="user-info">
+            <div class="user-avatar">👤</div>
+            <div class="user-details">
+                <div class="user-name" id="userName">Loading...</div>
+                <button class="btn-logout" onclick="logout()">Đăng xuất</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Header -->
+        <div class="header">
+            <h1 id="pageTitle">Công việc của tôi</h1>
+            <button class="btn-primary" onclick="openModal('taskModal')">
+                ➕ Thêm công việc
+            </button>
+        </div>
+
+        <!-- Tasks Page -->
+        <div id="tasksPage" class="page active">
+            <!-- Bộ lọc -->
+            <div class="filters">
+                <select id="filterStatus" onchange="filterTasks()">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                </select>
+                <select id="filterPriority" onchange="filterTasks()">
+                    <option value="">Tất cả độ ưu tiên</option>
+                    <option value="5">⭐⭐⭐⭐⭐</option>
+                    <option value="4">⭐⭐⭐⭐</option>
+                    <option value="3">⭐⭐⭐</option>
+                    <option value="2">⭐⭐</option>
+                    <option value="1">⭐</option>
+                </select>
+                <input type="text" id="searchTask" placeholder="🔍 Tìm kiếm..." oninput="searchTasks()">
+            </div>
+
+            <!-- Danh sách tasks -->
+            <div id="tasksList" class="tasks-grid"></div>
+        </div>
+
+        <!-- Groups Page -->
+        <div id="groupsPage" class="page">
+            <div id="groupsList" class="groups-grid"></div>
+        </div>
+
+        <!-- Profile Page -->
+        <div id="profilePage" class="page">
+            <div class="profile-card">
+                <h2>Thông tin cá nhân</h2>
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="profileUsername" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>Họ tên</label>
+                        <input type="text" id="profileFullname">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="profileEmail">
+                    </div>
+                    <button type="submit" class="btn-primary">Cập nhật</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Thêm/Sửa Task -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="taskModalTitle">Thêm công việc</h2>
+                <span class="close" onclick="closeModal('taskModal')">&times;</span>
+            </div>
+            <form id="taskForm">
+                <input type="hidden" id="taskId">
+                <div class="form-group">
+                    <label>Tên công việc *</label>
+                    <input type="text" id="taskName" required>
+                </div>
+                <div class="form-group">
+                    <label>Mô tả</label>
+                    <textarea id="taskDescription" rows="3"></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Trạng thái</label>
+                        <select id="taskStatus">
+                            <option value="Pending">Pending</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Độ ưu tiên</label>
+                        <select id="taskPriority">
+                            <option value="5">⭐⭐⭐⭐⭐</option>
+                            <option value="4">⭐⭐⭐⭐</option>
+                            <option value="3" selected>⭐⭐⭐</option>
+                            <option value="2">⭐⭐</option>
+                            <option value="1">⭐</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary" onclick="closeModal('taskModal')">Hủy</button>
+                    <button type="submit" class="btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ⚠️ Load config TRƯỚC -->
+    <script src="js/config.js"></script>
+    <!-- Sau đó mới load dashboard logic -->
+    <script src="js/dashboard.js"></script>
+</body>
+</html>
