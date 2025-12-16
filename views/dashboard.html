@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Task Manager</title>
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/enhanced-dashboard.css">
 </head>
 <body>
     <!-- Sidebar -->
@@ -40,9 +40,14 @@
         <!-- Header -->
         <div class="header">
             <h1 id="pageTitle">Công việc của tôi</h1>
-            <button class="btn-primary" onclick="openModal('taskModal')">
-                ➕ Thêm công việc
-            </button>
+            <div class="header-actions">
+                <button class="btn-primary" onclick="openModal('groupModal')" id="btnCreateGroup" style="display:none;">
+                    <span>➕</span> Tạo nhóm
+                </button>
+                <button class="btn-primary" onclick="openModal('taskModal')" id="btnCreateTask">
+                    <span>➕</span> Thêm công việc
+                </button>
+            </div>
         </div>
 
         <!-- Tasks Page -->
@@ -70,7 +75,7 @@
             <div id="tasksList" class="tasks-grid"></div>
         </div>
 
-        <!-- Assigned To Me Page (MỚI) -->
+        <!-- Assigned To Me Page -->
         <div id="assignedPage" class="page">
             <div id="assignedTasksList" class="tasks-grid"></div>
         </div>
@@ -87,15 +92,15 @@
                 <form id="profileForm">
                     <div class="form-group">
                         <label>Username</label>
-                        <input type="text" id="profileUsername" readonly>
+                        <input type="text" id="profileUsername" class="form-control" readonly>
                     </div>
                     <div class="form-group">
                         <label>Họ tên</label>
-                        <input type="text" id="profileFullname">
+                        <input type="text" id="profileFullname" class="form-control">
                     </div>
                     <div class="form-group">
                         <label>Email</label>
-                        <input type="email" id="profileEmail">
+                        <input type="email" id="profileEmail" class="form-control">
                     </div>
                     <button type="submit" class="btn-primary">Cập nhật</button>
                 </form>
@@ -103,59 +108,115 @@
         </div>
     </div>
 
-    <!-- Modal Thêm/Sửa Task -->
-    <div id="taskModal" class="modal">
+    <!-- Modal Tạo/Sửa Group -->
+    <div id="groupModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="taskModalTitle">Thêm công việc</h2>
-                <span class="close" onclick="closeModal('taskModal')">&times;</span>
+                <h2 id="groupModalTitle">Tạo nhóm mới</h2>
+                <span class="close" onclick="closeModal('groupModal')">&times;</span>
             </div>
-            <form id="taskForm">
-                <input type="hidden" id="taskId">
-                <div class="form-group">
-                    <label>Tên công việc *</label>
-                    <input type="text" id="taskName" required>
-                </div>
-                <div class="form-group">
-                    <label>Mô tả</label>
-                    <textarea id="taskDescription" rows="3"></textarea>
-                </div>
-                <div class="form-row">
+            <div class="modal-body">
+                <form id="groupForm">
+                    <input type="hidden" id="groupId">
                     <div class="form-group">
-                        <label>Trạng thái</label>
-                        <select id="taskStatus">
-                            <option value="Pending">Pending</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Completed">Completed</option>
-                        </select>
+                        <label>Tên nhóm *</label>
+                        <input type="text" id="groupName" class="form-control" placeholder="Nhập tên nhóm" required>
                     </div>
-                    <div class="form-group">
-                        <label>Độ ưu tiên</label>
-                        <select id="taskPriority">
-                            <option value="5">⭐⭐⭐⭐⭐</option>
-                            <option value="4">⭐⭐⭐⭐</option>
-                            <option value="3" selected>⭐⭐⭐</option>
-                            <option value="2">⭐⭐</option>
-                            <option value="1">⭐</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" onclick="closeModal('taskModal')">Hủy</button>
-                    <button type="submit" class="btn-primary">Lưu</button>
-                </div>
-            </form>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModal('groupModal')">Hủy</button>
+                <button type="button" class="btn-primary" onclick="saveGroup()">Lưu</button>
+            </div>
         </div>
     </div>
 
-    <!-- Modal Assign Task (MỚI) -->
+    <!-- Modal Thêm Task -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Thêm công việc</h2>
+                <span class="close" onclick="closeModal('taskModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="taskForm">
+                    <div class="form-group">
+                        <label>Tên công việc *</label>
+                        <input type="text" id="taskName" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Mô tả</label>
+                        <textarea id="taskDescription" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Nhóm (tùy chọn)</label>
+                        <select id="taskGroup" class="form-control">
+                            <option value="">Không thuộc nhóm</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Trạng thái</label>
+                            <select id="taskStatus" class="form-control">
+                                <option value="Pending">Pending</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Completed">Completed</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Độ ưu tiên</label>
+                            <select id="taskPriority" class="form-control">
+                                <option value="5">⭐⭐⭐⭐⭐</option>
+                                <option value="4">⭐⭐⭐⭐</option>
+                                <option value="3" selected>⭐⭐⭐</option>
+                                <option value="2">⭐⭐</option>
+                                <option value="1">⭐</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModal('taskModal')">Hủy</button>
+                <button type="button" class="btn-primary" onclick="saveTask()">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Quản lý thành viên -->
+    <div id="membersModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="membersModalTitle">Thành viên nhóm</h2>
+                <span class="close" onclick="closeModal('membersModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="currentGroupId">
+                
+                <!-- Search members -->
+                <div class="search-member">
+                    <input type="text" id="searchMember" class="form-control" placeholder="🔍 Tìm thành viên để thêm...">
+                    <div id="searchResults" class="search-results" style="display:none;"></div>
+                </div>
+
+                <!-- Members list -->
+                <h3 style="margin: 20px 0 10px 0; font-size: 16px;">Danh sách thành viên:</h3>
+                <div id="membersList" class="members-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModal('membersModal')">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Assign Task -->
     <div id="assignModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Giao công việc</h2>
                 <span class="close" onclick="closeModal('assignModal')">&times;</span>
             </div>
-            <div style="padding: 25px;">
+            <div class="modal-body">
                 <input type="hidden" id="assignTaskId">
                 <div class="form-group">
                     <label>Chọn thành viên</label>
@@ -164,19 +225,18 @@
                     </select>
                 </div>
                 
-                <h3 style="margin-top: 20px; margin-bottom: 10px;">Đã giao cho:</h3>
-                <div id="assigneesList" class="assignees-list"></div>
-                
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary" onclick="closeModal('assignModal')">Đóng</button>
-                    <button type="button" class="btn-primary" onclick="assignTaskToUser()">Giao việc</button>
-                </div>
+                <h3 style="margin-top: 20px; margin-bottom: 10px; font-size: 16px;">Đã giao cho:</h3>
+                <div id="assigneesList" class="members-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeModal('assignModal')">Đóng</button>
+                <button type="button" class="btn-primary" onclick="assignTaskToUser()">Giao việc</button>
             </div>
         </div>
     </div>
 
     <!-- Load scripts -->
     <script src="js/config.js"></script>
-    <script src="js/dashboard.js"></script>
+    <script src="js/enhanced-dashboard.js"></script>
 </body>
 </html>
