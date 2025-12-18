@@ -103,7 +103,15 @@ async function loadTasks() {
             currentTasks = data.data.tasks;
             console.log('Loaded tasks:', currentTasks);
             displayTasks(currentTasks);
-            populateGroupSelect(currentGroups);
+
+            // 🔥 đảm bảo group đã load
+            if (currentGroups.length === 0) {
+                const groups = await loadGroups();
+                populateGroupSelect(groups);
+            } else {
+                populateGroupSelect(currentGroups);
+            }
+
         }
     } catch (error) {
         console.error('Error loading tasks:', error);
@@ -276,7 +284,6 @@ function populateGroupSelect(groups) {
         ).join('');
 }
 
-// ===== GROUPS =====
 async function loadGroups() {
     try {
         const response = await fetch(`${CONFIG.API_URL}/groups`, {
@@ -287,7 +294,9 @@ async function loadGroups() {
         if (data.status === 'success') {
             currentGroups = data.data.groups;
             displayGroups(currentGroups);
+            return currentGroups; // ✅ THÊM DÒNG NÀY
         }
+        return [];
     } catch (error) {
         console.error('Error loading groups:', error);
         document.getElementById('groupsList').innerHTML = `
@@ -296,11 +305,14 @@ async function loadGroups() {
                 <p>${error.message}</p>
             </div>
         `;
+        return [];
     }
 }
 
 function displayGroups(groups) {
     const container = document.getElementById('groupsList');
+    
+    console.log('📊 Displaying groups:', groups); // ✅ Debug line
     
     if (groups.length === 0) {
         container.innerHTML = `
@@ -339,6 +351,8 @@ function displayGroups(groups) {
             </div>
         </div>
     `).join('');
+    
+    console.log('✅ Groups displayed successfully'); // ✅ Debug line
 }
 
 // ===== PROFILE =====
@@ -388,3 +402,39 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ===== NAVIGATION =====
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const page = item.dataset.page;
+        
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        
+        item.classList.add('active');
+        document.getElementById(page + 'Page').classList.add('active');
+        
+        const titles = {
+            tasks: 'Công việc của tôi',
+            assigned: 'Công việc được giao',
+            groups: 'Nhóm của tôi',
+            profile: 'Hồ sơ cá nhân'
+        };
+        document.getElementById('pageTitle').textContent = titles[page];
+        
+        // Show/hide buttons
+        document.getElementById('btnCreateTask').style.display = (page === 'tasks') ? 'flex' : 'none';
+        document.getElementById('btnCreateGroup').style.display = (page === 'groups') ? 'flex' : 'none';
+        
+        // Load data - QUAN TRỌNG: Luôn reload từ API
+        console.log('📍 Navigating to page:', page);
+        if (page === 'tasks') await loadTasks();
+        if (page === 'assigned') await loadAssignedTasks();
+        if (page === 'groups') {
+            console.log('🔄 Loading groups from navigation...');
+            await loadGroups();
+        }
+        if (page === 'profile') await loadProfile();
+    });
+});

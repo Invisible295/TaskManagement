@@ -146,7 +146,7 @@ async function deleteTask(taskId) {
         
         if (data.status === 'success') {
             alert('✅ Xóa công việc thành công!');
-            loadTasks();
+            await loadTasks();
         } else {
             alert('❌ ' + (data.message || 'Không thể xóa công việc'));
         }
@@ -195,11 +195,11 @@ async function saveStatusUpdate() {
         
         if (data.status === 'success') {
             closeModal('updateStatusModal');
-            loadTasks();
+            await loadTasks();
             
             // Nếu đang xem assigned tasks, reload lại
             if (window.currentAssignedTasks) {
-                loadAssignedTasks();
+                await loadAssignedTasks();
             }
             
             alert('✅ Cập nhật trạng thái thành công!');
@@ -269,7 +269,7 @@ async function openEditGroupModal(groupId) {
 }
 
 /**
- * Lưu hoặc cập nhật nhóm - FIXED VERSION WITH AUTO NAVIGATION
+ * Lưu hoặc cập nhật nhóm - FIXED VERSION
  */
 async function saveGroup() {
     const groupId = document.getElementById('groupId').value;
@@ -298,43 +298,67 @@ async function saveGroup() {
         } else {
             // TẠO MỚI group
             console.log('➕ Creating new group');
+            console.log('🌐 API URL:', `${CONFIG.API_URL}/groups`);
+            console.log('📦 Request body:', JSON.stringify({ groupName }));
+            
             response = await fetch(`${CONFIG.API_URL}/groups`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({ groupName })
             });
+            
+            console.log('📡 Response status:', response.status);
+            console.log('📡 Response ok:', response.ok);
+            
             successMessage = '✅ Tạo nhóm thành công!';
         }
         
-        const data = await response.json();
-        console.log('📥 Full API Response:', data);
-        console.log('📊 Response status:', response.status);
+        // Parse response
+        const responseText = await response.text();
+        console.log('📥 Raw response:', responseText);
+        
+        let data;
+        try {
+            data = JSON.parse(responseText);
+            console.log('📥 Parsed response:', data);
+        } catch (parseError) {
+            console.error('❌ JSON parse error:', parseError);
+            alert('❌ Server trả về dữ liệu không hợp lệ');
+            return;
+        }
         
         if (data.status === 'success') {
+            console.log('✅ API success, new group data:', data.data);
+            
+            // ✅ 1. Đóng modal
             closeModal('groupModal');
             
-            // ✅ FIX: Chuyển sang trang Groups TRƯỚC KHI load
-            if (!groupId) {
-                console.log('📍 Switching to Groups page FIRST...');
-                document.querySelector('.nav-item[data-page="groups"]').click();
-                
-                // Đợi một chút để trang chuyển xong
-                await new Promise(resolve => setTimeout(resolve, 100));
+            // ✅ 2. Kiểm tra xem đang ở trang nào
+            const groupsTab = document.querySelector('.nav-item[data-page="groups"]');
+            const isOnGroupsPage = groupsTab && groupsTab.classList.contains('active');
+            
+            if (!isOnGroupsPage) {
+                // Nếu KHÔNG ở trang Groups → Chuyển sang trang Groups
+                console.log('📍 Switching to Groups page...');
+                groupsTab.click();
+                // Navigation handler sẽ tự động load groups
+            } else {
+                // Nếu ĐÃ Ở trang Groups → Chỉ cần reload
+                console.log('🔄 Already on Groups page, reloading...');
+                await loadGroups();
             }
             
-            // ✅ Reload groups
-            console.log('🔄 Reloading groups...');
-            await loadGroups();
-            console.log('✅ Groups reloaded successfully');
-            console.log('📦 Current groups array:', currentGroups);
-            
+            // ✅ 3. Hiển thị thông báo
             alert(successMessage);
+            
+            console.log('✅ Group saved and displayed successfully');
         } else {
-            console.error('❌ API returned error:', data);
+            console.error('❌ API Error:', data);
             alert('❌ ' + (data.message || 'Có lỗi xảy ra'));
         }
     } catch (error) {
         console.error('❌ Error saving group:', error);
+        console.error('❌ Error stack:', error.stack);
         alert('❌ Không thể lưu nhóm: ' + error.message);
     }
 }
