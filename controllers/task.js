@@ -4,6 +4,7 @@ const Group = require('../models/Group');
 const GroupMember = require('../models/GroupMember');
 const CatchAsync = require('../utils/CatchAsync');
 const AppError = require('../utils/AppError');
+const TaskAssignment = require('../models/TaskAssignment');
 
 // Tạo task mới
 exports.createTask = CatchAsync(async (req, res, next) => {
@@ -156,7 +157,7 @@ exports.deleteTask = CatchAsync(async (req, res, next) => {
 
   await Task.delete(taskid);
 
-  res.status(204).json({
+  res.status(200).json({
     status: 'success',
     data: null
   });
@@ -278,14 +279,20 @@ exports.updateStatus = CatchAsync(async (req, res, next) => {
     return next(new AppError('Task not found', 404));
   }
 
-  // 3. Kiểm tra quyền: chỉ owner hoặc group leader mới được cập nhật
+  // 3. Kiểm tra quyền: owner hoặc group leader hoặc người được assign mới được cập nhật
   const isOwner = task.id === userId;
   let isLeader = false;
+  let isAssigned = false;
+
   if (task.groupID) {
     isLeader = await Group.isLeader(task.groupID, userId);
   }
 
-  if (!isOwner && !isLeader) {
+  // Kiểm tra xem user có được assign cho task này không
+  const assignees = await TaskAssignment.getAssignees(taskid);
+  isAssigned = assignees.some(a => a.id === userId);
+
+  if (!isOwner && !isLeader && !isAssigned) {
     return next(new AppError('You do not have permission to update this task', 403));
   }
 
@@ -362,6 +369,195 @@ exports.filterTasks = CatchAsync(async (req, res, next) => {
     results: tasks.length,
     data: {
       tasks
+    }
+  });
+});
+
+
+
+
+
+
+
+
+//Phần LÂM
+
+
+// ===== TASK ASSIGNMENT =====
+
+// Giao task cho user
+exports.assignTask = CatchAsync(async (req, res, next) => {
+  const { taskid } = req.params;
+  const { assignedTo, notes } = req.body;
+  const userId = req.user.id;
+
+  if (!assignedTo) {
+    return next(new AppError('User ID is required', 400));
+  }
+
+  // 1. Lấy thông tin task
+  const task = await Task.findById(taskid);
+  if (!task) {
+    return next(new AppError('Task not found', 404));
+  }
+
+  // 2. Kiểm tra quyền: chỉ owner hoặc group leader mới được assign
+  const isOwner = task.id === userId;
+  let isLeader = false;
+  
+  if (task.groupID) {
+    isLeader = await Group.isLeader(task.groupID, userId);
+    
+    // Kiểm tra assignedTo có phải member của group không
+    const isMember = await GroupMember.isMember(assignedTo, task.groupID);
+    if (!isMember) {
+      return next(new AppError('User must be a member of the group', 400));
+    }
+  }
+
+  if (!isOwner && !isLeader) {
+    return next(new AppError('You do not have permission to assign this task', 403));
+  }
+
+  // 3. Assign task với notes
+  const assigned = await TaskAssignment.assign(taskid, assignedTo, userId, notes || null);
+
+  if (!assigned) {
+    return next(new AppError('User is already assigned to this task', 400));
+  }
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Task assigned successfully'
+  });
+});
+
+// Hủy assignment
+exports.unassignTask = CatchAsync(async (req, res, next) => {
+  const { taskid, userId } = req.params;
+  const currentUserId = req.user.id;
+
+  // 1. Lấy thông tin task
+  const task = await Task.findById(taskid);
+  if (!task) {
+    return next(new AppError('Task not found', 404));
+  }
+
+  // 2. Kiểm tra quyền
+  const isOwner = task.id === currentUserId;
+  let isLeader = false;
+  
+  if (task.groupID) {
+    isLeader = await Group.isLeader(task.groupID, currentUserId);
+  }
+
+  if (!isOwner && !isLeader) {
+    return next(new AppError('You do not have permission to unassign this task', 403));
+  }
+
+  // 3. Unassign
+  const unassigned = await TaskAssignment.unassign(taskid, userId);
+
+  if (!unassigned) {
+    return next(new AppError('User is not assigned to this task', 400));
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Task unassigned successfully'
+  });
+});
+
+// Lấy danh sách assignees của task
+exports.getTaskAssignees = CatchAsync(async (req, res, next) => {
+  const { taskid } = req.params;
+  const userId = req.user.id;
+
+  // Kiểm tra quyền truy cập task
+  const task = await Task.findById(taskid);
+  if (!task) {
+    return next(new AppError('Task not found', 404));
+  }
+
+  const isOwner = task.id === userId;
+  const hasGroupAccess = task.groupID ? await Task.checkGroupAccess(taskid, userId) : false;
+
+  if (!isOwner && !hasGroupAccess) {
+    return next(new AppError('You do not have permission to view this task', 403));
+  }
+
+  const assignees = await TaskAssignment.getAssignees(taskid);
+
+  res.status(200).json({
+    status: 'success',
+    results: assignees.length,
+    data: {
+      assignees
+    }
+  });
+});
+
+// Lấy tasks được assign cho tôi
+exports.getMyAssignedTasks = CatchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const tasks = await TaskAssignment.getTasksAssignedTo(userId);
+
+  res.status(200).json({
+    status: 'success',
+    results: tasks.length,
+    data: {
+      tasks
+    }
+  });
+});
+
+// Lấy tasks tôi đã assign cho người khác
+exports.getTasksIAssigned = CatchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const tasks = await TaskAssignment.getTasksAssignedBy(userId);
+
+  res.status(200).json({
+    status: 'success',
+    results: tasks.length,
+    data: {
+      tasks
+    }
+  });
+});
+
+// Assign cho nhiều users cùng lúc
+exports.assignMultipleUsers = CatchAsync(async (req, res, next) => {
+  const { taskid } = req.params;
+  const { userIDs } = req.body;
+  const userId = req.user.id;
+
+  if (!userIDs || !Array.isArray(userIDs) || userIDs.length === 0) {
+    return next(new AppError('User IDs array is required', 400));
+  }
+
+  // Kiểm tra quyền (tương tự assignTask)
+  const task = await Task.findById(taskid);
+  if (!task) {
+    return next(new AppError('Task not found', 404));
+  }
+
+  const isOwner = task.id === userId;
+  let isLeader = false;
+  
+  if (task.groupID) {
+    isLeader = await Group.isLeader(task.groupID, userId);
+  }
+
+  if (!isOwner && !isLeader) {
+    return next(new AppError('You do not have permission to assign this task', 403));
+  }
+
+  const results = await TaskAssignment.assignMultiple(taskid, userIDs, userId);
+
+  res.status(201).json({
+    status: 'success',
+    data: {
+      results
     }
   });
 });

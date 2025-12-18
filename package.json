@@ -1,10 +1,10 @@
 {
   "name": "taskmanagement",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -23,5 +23,14 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quoclam2111/TaskManagement.git"
+  },
+  "bugs": {
+    "url": "https://github.com/quoclam2111/TaskManagement/issues"
+  },
+  "homepage": "https://github.com/quoclam2111/TaskManagement#readme",
+  "description": ""
 }
